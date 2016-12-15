@@ -8,8 +8,8 @@ credentials (username, password), as the RAPP Platform does not
 provide such information at the moment!
 
 User's email credentials can be passed to the application in the following ways:
-- Append username and password credentials in a file under the same directory
-of the application executable. That file should have the following format:
+- Append username and password credentials in a file named `creds` under the same directory
+of the application executable. That `creds` file should have the following format:
 
 ```
 username: xxx
