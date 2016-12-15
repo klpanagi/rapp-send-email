@@ -32,15 +32,25 @@ class Constants:
 
 class SendMail(object):
     ##  Default constructor
-    def __init__(self, email_username, email_pass, recipients=[]):
+    def __init__(self, creds={}, recipients=[]):
         """ Default Constructor."""
         self.language = 'el'
         self.askValidation = True
         self.waitOnAnswer = 5
         self.rh = RappRobot()
         self.ch = RappPlatformAPI()
-        self.emailUsername = email_username
-        self.emailPass = email_pass
+        self.emailCreds = {'username': '', 'password': ''}
+        self.__load_email_credentials()
+        if 'username' in creds:
+            self.emailCreds['username'] = creds['username']
+        if 'password' in creds:
+            self.emailCreds['password'] = creds['password']
+        print self.emailCreds
+        if self.emailCreds['username'] == '' or self.emailCreds['password'] == '':
+            self.say(u'Δεν βρήκα καταχωρημένα τα στοιχεία λογαριασμού ηλεκτρονικού ταχυδρομίου. Παρακαλώ επικοινώνησε με την τεχνική υπηρεσια.')
+            self.rh.humanoid_motion.goToPosture('Sit', 0.5)
+            sys.exit(1)
+
         self.emailTitle = "NAO SendMail RApp"
         self.emailBody = "Hello I am NAO robot :)\n\n" + \
             "This is an automated email that the user" + \
@@ -54,7 +64,13 @@ class SendMail(object):
             self.rh.humanoid_motion.goToPosture('Sit', 0.5)
             self.intro()
             emails = self.get_available_emails()
-            self.ask_for_recipients(emails)
+            if len(emails) != 0:
+                self.ask_for_recipients(emails)
+            print self.recipients
+            if len(self.recipients) == 0:
+                self.say(u'Δεν δόθηκαν παραλήπτες. Τερματισμός εφαρμογής')
+                self.rh.humanoid_motion.goToPosture('Sit', 0.5)
+                sys.exit(0)
             recDest = self.phase_record_speech()
             imgDest = self.phase_capture_photo()
             files = []
@@ -62,9 +78,8 @@ class SendMail(object):
                 files.append(recDest)
             if imgDest is not None:
                 files.append(imgDest)
-            print files
             zipDest = self.make_zip(files)
-            resp = self.ch.emailSend(self.emailUsername, self.emailPass,
+            resp = self.ch.emailSend(self.emailCreds['username'], self.emailCreds['password'],
                                      'smtp.gmail.com', '587',
                                      self.recipients, self.emailBody,
                                      self.emailTitle, zipDest)
@@ -214,7 +229,8 @@ class SendMail(object):
         """ Inform on termination with error."""
         self.rh.audio.speak(u'Κατι πήγε λαθος στο σύστημα. Άμεσος τερματισμός!',
                             self.language, True)
-        sys.exit(0)
+        self.rh.humanoid_motion.goToPosture('Sit', 0.5)
+        sys.exit(1)
 
     def detect_words(self, possibAns, correctAns, waitT):
         """ Detect words given by possible answers and correct answer.
@@ -310,11 +326,13 @@ class SendMail(object):
 
     def get_available_emails(self):
         resp = self.ch.userPersonalInfo()
+        if resp['error'] == '':
+            self.error_termination()
         emails = resp['emails']
-        if len(emails) == 0:
-            self.say(u'Ο συγκεκριμένος χρήστης δεν έχει καταχωρημένες διευθύνσεις αποστολής ηλεκτρονικών μηνυμάτων.')
-            self.say(u'Τερματισμός εφαρμογής')
-            sys.exit(1)
+        # if len(self.recipients) == 0:
+            # self.say(u'Ο συγκεκριμένος χρήστης δεν έχει καταχωρημένες διευθύνσεις αποστολής ηλεκτρονικών μηνυμάτων.')
+            # self.say(u'Τερματισμός εφαρμογής')
+            # sys.exit(1)
         return emails
 
     def ask_for_recipients(self, emails):
@@ -333,28 +351,52 @@ class SendMail(object):
                         break
                     else:
                         pass
-            if len(self.recipients) == 0:
-                self.say('Παρακαλώ επέλεξε τουλάχιστον ένα παραλήπτη')
-            else:
-                break
+            # if len(self.recipients) == 0:
+                # self.say('Παρακαλώ επέλεξε τουλάχιστον ένα παραλήπτη')
+            # else:
+                # break
         print self.recipients
+
+    def __load_email_credentials(self):
+        fpath = path.join(path.dirname(path.realpath(__file__)), "creds")
+        try:
+            with open (fpath, 'r') as fstream:
+                for line in fstream:
+                    l = line.split(':')
+                    if len(l) == 2:
+                        key, val = (l[0].strip(), l[1].strip())
+                        if key in ['username', 'password']:
+                            self.emailCreds[key] = val
+        except IOError as e:
+            print e
 
 
 if __name__ == "__main__":
-    try:
-        emailUsername = sys.argv[1]
-    except IndexError as e:
-        print "You must provide email account username as an argument"
-        sys.exit(1)
-    try:
-        emailPass = sys.argv[2]
-    except IndexError as e:
-        print "You must provide email account password as an argument"
-        sys.exit(1)
-    try:
-        destEmail = sys.argv[3]
-    except IndexError as e:
-        pass
+    import optparse
+    parser = optparse.OptionParser()
+    parser.add_option('-u', '--username',
+                      dest="username",
+                      default='',
+                      )
+    parser.add_option('-p', '--password',
+                      dest="password",
+                      default='',
+                      )
+    parser.add_option('-d', '--dest',
+                      dest="dest",
+                      default=None,
+                      help="Destination email addresses, splitted by conma"
+                      )
+    (options, args) = parser.parse_args()
+    if options.dest is not None:
+        dest = options.dest.split(',')
+    else:
+        dest = []
+    creds = {}
+    print dest
+    if options.username != '' and options.password != '':
+        creds['username'] = options.username
+        creds['password'] = options.password
 
-    rapp = SendMail(emailUsername, emailPass, recipients=[destEmail])
+    rapp = SendMail(creds, recipients=dest)
     rapp.run()
