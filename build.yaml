@@ -10,3 +10,4 @@ api: 0.6.0
 
 package:
   - build/send_email.py
+  - README.md
