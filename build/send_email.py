@@ -326,7 +326,7 @@ class SendMail(object):
 
     def get_available_emails(self):
         resp = self.ch.userPersonalInfo()
-        if resp['error'] == '':
+        if resp['error'] != '':
             self.error_termination()
         emails = resp['emails']
         # if len(self.recipients) == 0:
